@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QLineEdit
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas # figurecanvas -> allows matplot graph to be inside Qt window
 from matplotlib.figure import Figure # figure -> the graph itself
 
@@ -25,11 +26,23 @@ def update_graph():
     equation = equation.replace("π", "pi")  # Replace the pi symbol with sympy's pi function
     # infinity translator
     equation = equation.replace("∞", "oo")  # Replace the infinity symbol with sympy's oo (infinity) function
+    # ln translator
+    equation = equation.replace("ln(", "log(") # WILL CHANGE ONCE ADD BASE 10 TO LOG 
+    # log translator
+    # equation = equation.replace("log10(", ")
 
     print ("Equation sent to SymPy: ", equation)
 
     try:
-        expression = sp.sympify(equation)  # Convert the input string to a sympy expression
+        local_dict = {
+            "ln": sp.log,
+            "log10": lambda value: sp.log(value, 10),
+            "sqrt": sp.sqrt,
+            "pi": sp.pi,
+            "oo": sp.oo
+        }
+
+        expression = sp.sympify(equation, locals=local_dict)  # Convert the input string to a sympy expression
         x_values = np.linspace(-10, 10, 400)
         function = lambdify (x, expression, "numpy")  # Convert the sympy expression to a numpy function
         y_values = function(x_values)
@@ -53,16 +66,50 @@ def update_graph():
     #canvas.draw()
 
 class ExponentBox (QLineEdit):
-    def __init__ (self, editor, position):
-        super().__init__()
+    def __init__ (self, editor, position): 
+        super().__init__(editor)
 
         self.editor = editor
         self.position = position
 
-        self.setFixedSize(35,22)
+        self.setFixedSize(30,18)
+
+        small_font = QFont()
+        small_font.setPointSize(9)
+        self.setFont(small_font)
+
+        self.selectAll()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Right:
+            self.clearFocus()
+            self.editor.text.setFocus()
+            self.editor.text.setCursorPosition(self.position)
+
+        elif event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
+            self.clearFocus()
+            self.editor.text.setFocus()
+            update_graph()
+
+        else:
+            super().keyPressEvent(event)
+
+class AbsoluteValueBox (QLineEdit):
+    def __innit__(self, editor, position):
+        super().__init__(editor)
+
+        self.editor = editor
+        self.position = position
+
+        self.setFixedSize(100,22)
+
+        small_font = QFont
+        small_font.setPointSize(10)
+        self.setFont(small_font)
+
+    def keyPressEvent(self, event):
+
+        if event.key() == Qt.Key_Right:        # right arrow -> main equation
             self.clearFocus()
             self.editor.text.setFocus()
             self.editor.text.setCursorPosition(self.position)
@@ -86,6 +133,7 @@ class EquationEditor(QWidget):
         self.text.returnPressed.connect(update_graph)
 
         self.exponents = []
+        self.absolute_values = []
         self.setMinimumHeight(50)
 
     def resizeEvent(self, event):
@@ -97,21 +145,33 @@ class EquationEditor(QWidget):
 
         exponent_box = ExponentBox(self, position)
         self.exponents.append(exponent_box)
-        exponent_box.show()
+        #exponent_box.show()
 
         cursor_rect = self.text.cursorRect()
 
-        exponent_box.move(cursor_rect.x(),0) # cursor_rect.y() - 15)
+        exponent_box.move(self.text.x() + cursor_rect.x(), self.text.y() - 12)
 
         exponent_box.show()
         exponent_box.raise_()
         exponent_box.setFocus()
 
+    def add_absolute_value(self):
+        position = self.text.cursorPosition()
+        absolute_box = AbsoluteValueBox(self, position)
+        self.absolute_values.append(absolute_box)
+        cursor_rect = self.text.cursorRect()
+
+        absolute_box.move (self.text.x() + cursor_rect.x(), self.text.y() - 12)
+
+        absolute_box.show()
+        absolute_box.raise_()
+        absolute_box.setFocus()
+
 
     def get_equation (self):
         equation = self.text.text()
 
-        for exponent_box in reversed(self.exponents): 
+        for exponent_box in sorted (self.exponents, key=lambda box: box.position, reverse=True): 
             exponent = exponent_box.text()
 
             if exponent:
@@ -121,6 +181,14 @@ class EquationEditor(QWidget):
                 exponent = exponent.replace("∞", "oo")
 
                 equation=(equation[:position]+ "**(" + exponent + ")" + equation[position:])
+
+        for absolute_box in self.absolute_values:
+            value = absolute_box.text()
+
+            if value:
+                position = absolute_box.position
+
+                equation = (equation[:position] + "Abs(" + value + ")" + equation [position:])
         
         return equation 
 
@@ -135,6 +203,10 @@ def clear_equation():
         exponent_box.deleteLater()
 
     equation_input.exponents.clear()
+    # clear graph
+    axis.clear()
+    canvas.draw()
+    # clear search bar
     equation_input.text.setFocus()
     
 window = QWidget()
@@ -172,6 +244,21 @@ infinity_button = QPushButton("∞")
 controls_layout.addWidget(infinity_button)
 infinity_button.clicked.connect(lambda: equation_input.insert("∞")) 
 
+# ln button
+ln_button = QPushButton("ln")
+controls_layout.addWidget(ln_button)
+ln_button.clicked.connect(lambda: equation_input.insert("ln("))
+
+# log button
+log_button = QPushButton("log")
+controls_layout.addWidget(log_button)
+log_button.clicked.connect(lambda: equation_input.insert("log10("))
+
+# absolute value button
+abs_val_button = QPushButton("|x|")
+controls_layout.addWidget(abs_val_button)
+abs_val_button.clicked.connect(equation_input.add_absolute_value)
+
 #equation_input.returnPressed.connect(update_graph) # when user presses enter, update graph
 
 #layout.addWidget(button) # add button to layout
@@ -187,3 +274,5 @@ layout.addLayout(top_layout) # add top section to main layout
 
 window.show()
 app.exec()
+
+# SOMETHING WRONG WITH EXPONENT BUTTON, FIX IT  
