@@ -17,6 +17,52 @@ figure = Figure()
 axis = figure.add_subplot(111) 
 canvas = FigureCanvas(figure) 
 
+def update_all_graphs():
+    axis.clear()
+
+    for equation_input in equation_editors:
+        equation = equation_input.get_equation()
+
+        # sqrt translator
+        equation = equation.replace("√", "sqrt")  # Replace the square root symbol with sympy's sqrt function
+        # pi translator
+        equation = equation.replace("π", "pi")  # Replace the pi symbol with sympy's pi function
+        # infinity translator
+        equation = equation.replace("∞", "oo")  # Replace the infinity symbol with sympy's oo (infinity) function
+        # ln translator
+        equation = equation.replace("ln(", "log(")
+
+        if not equation.strip():
+            continue
+
+        print("Equation sent to Sympty", equation)
+
+        try:
+            local_dict = {
+                "ln": sp.log,
+                "log10": lambda value: sp.log(value, 10),
+                "sqrt": sp.sqrt,
+                "pi": sp.pi,
+                "oo": sp.oo
+            }
+
+            expression = sp.sympify (equation, locals = local_dict)
+
+            x_values = np.linspace(-10,10,400)
+            function = lambdify(x, expression, "numpy")
+            y_values = function(x_values)
+            axis.plot(x_values, y_values)
+
+        except Exception as e:
+            print ("Error:", e)
+
+    axis.set_xlabel("x")
+    axis.set_ylabel("y")
+    axis.set_title("Graph Visualizer")
+    axis.grid()
+
+    canvas.draw()
+
 
 def update_graph():
     equation = equation_input.get_equation()
@@ -95,17 +141,28 @@ class ExponentBox (QLineEdit):
             super().keyPressEvent(event)
 
 class AbsoluteValueBox (QLineEdit):
-    def __innit__(self, editor, position):
+    def __init__(self, editor, position):
         super().__init__(editor)
 
         self.editor = editor
         self.position = position
 
-        self.setFixedSize(100,22)
+        self.setFixedSize(30,22)
 
-        small_font = QFont
+        small_font = QFont()
         small_font.setPointSize(10)
         self.setFont(small_font)
+
+        self.setAlignment (Qt.AlignCenter)
+        self.setStyleSheet ("""
+            QLineEdit {
+                border: none;
+                border-left: 2px solid black;
+                border-right: 2px solid black;
+                background: transparent;
+                padding: 0 4px;
+            }
+        """)
 
     def keyPressEvent(self, event):
 
@@ -122,6 +179,8 @@ class AbsoluteValueBox (QLineEdit):
         else:
             super().keyPressEvent(event)
 
+equation_editors = []
+
 class EquationEditor(QWidget):
     def __init__(self):
         super().__init__()
@@ -130,7 +189,7 @@ class EquationEditor(QWidget):
         self.text.setPlaceholderText("Enter an equation...")
 
         self.text.setParent(self)
-        self.text.returnPressed.connect(update_graph)
+        self.text.returnPressed.connect(update_all_graphs)      # CHANGED IT TO UPDATE ALL GRAPHS
 
         self.exponents = []
         self.absolute_values = []
@@ -161,7 +220,9 @@ class EquationEditor(QWidget):
         self.absolute_values.append(absolute_box)
         cursor_rect = self.text.cursorRect()
 
-        absolute_box.move (self.text.x() + cursor_rect.x(), self.text.y() - 12)
+        # center vertically within text field instead of floating above it
+        y = self.text.y() + (self.text.height() - absolute_box.height()) // 2
+        absolute_box.move (self.text.x() + cursor_rect.x(), y)
 
         absolute_box.show()
         absolute_box.raise_()
@@ -182,11 +243,14 @@ class EquationEditor(QWidget):
 
                 equation=(equation[:position]+ "**(" + exponent + ")" + equation[position:])
 
-        for absolute_box in self.absolute_values:
+        for absolute_box in sorted(self.absolute_values, key=lambda box: box.position,reverse=True):
             value = absolute_box.text()
 
             if value:
                 position = absolute_box.position
+                value = value.replace("√", "sqrt")
+                value = value.replace("π", "pi")
+                value = value.replace("∞", "oo")
 
                 equation = (equation[:position] + "Abs(" + value + ")" + equation [position:])
         
@@ -203,11 +267,30 @@ def clear_equation():
         exponent_box.deleteLater()
 
     equation_input.exponents.clear()
+
+    for absolute_box in equation_input.absolute_values:
+        absolute_box.deleteLater()
+
     # clear graph
     axis.clear()
     canvas.draw()
     # clear search bar
     equation_input.text.setFocus()
+
+def add_equation():
+    new_equation = EquationEditor()
+    equation_editors.append(new_equation)
+
+    equation_row = QHBoxLayout()
+    equation_row.addWidget(new_equation)
+
+    plus_button = QPushButton("+")
+    plus_button.setFixedWidth(30)
+
+    equation_row.addWidget(plus_button)
+    equation_layout.addLayout(equation_row)
+    plus_button.clicked.connect(add_equation)
+    new_equation.text.setFocus()
     
 window = QWidget()
 window.setWindowTitle("Math Visualizer")
@@ -215,9 +298,19 @@ window.resize(800, 600)
 layout = QVBoxLayout(window) # QVboxLayout -> layout manager that arranges widgets vertically
 controls = QWidget() # create a widget to hold the controls
 controls_layout = QVBoxLayout(controls) # create a layout for the controls
+equation_layout = QVBoxLayout()
+controls_layout.addLayout(equation_layout)
 
+equation_editors = []
 equation_input = EquationEditor() 
-controls_layout.addWidget(equation_input)
+equation_editors.append(equation_input)
+first_row = QHBoxLayout()
+first_row.addWidget(equation_input)
+plus_button = QPushButton("+")
+plus_button.setFixedWidth(30)
+first_row.addWidget(plus_button)
+equation_layout.addLayout(first_row)
+plus_button.clicked.connect(add_equation)
 
 # clear button
 clear_button = QPushButton ("Clear")
@@ -276,3 +369,4 @@ window.show()
 app.exec()
 
 # SOMETHING WRONG WITH EXPONENT BUTTON, FIX IT  
+# SOMETHING WRONG WITH ABSOLUTE VALUE BUTTON, FIX IT
