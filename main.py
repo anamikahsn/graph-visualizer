@@ -2,7 +2,7 @@ import sympy as sp
 from sympy.utilities.lambdify import lambdify
 import numpy as np
 import matplotlib.pyplot as plt
-from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QLineEdit
+from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QLineEdit, QGridLayout, QSlider
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas # figurecanvas -> allows matplot graph to be inside Qt window
@@ -13,8 +13,9 @@ x = sp.symbols('x') # x = mathematical variable
 
 app = QApplication([])
 
-figure = Figure()
+figure = Figure(facecolor = "#EBEBE9")
 axis = figure.add_subplot(111) 
+axis.set_facecolor("#EBEBE9")
 canvas = FigureCanvas(figure) 
 
 def update_all_graphs():
@@ -51,7 +52,7 @@ def update_all_graphs():
             x_values = np.linspace(-10,10,400)
             function = lambdify(x, expression, "numpy")
             y_values = function(x_values)
-            axis.plot(x_values, y_values)
+            axis.plot(x_values, y_values, color="#4A533C")
 
         except Exception as e:
             print ("Error:", e)
@@ -62,47 +63,6 @@ def update_all_graphs():
     axis.grid()
 
     canvas.draw()
-
-
-def update_graph():
-    equation = equation_input.get_equation()
-    # sqrt translator
-    equation = equation.replace("√", "sqrt")  # Replace the square root symbol with sympy's sqrt function
-    # pi translator
-    equation = equation.replace("π", "pi")  # Replace the pi symbol with sympy's pi function
-    # infinity translator
-    equation = equation.replace("∞", "oo")  # Replace the infinity symbol with sympy's oo (infinity) function
-    # ln translator
-    equation = equation.replace("ln(", "log(") # WILL CHANGE ONCE ADD BASE 10 TO LOG 
-    # log translator
-    # equation = equation.replace("log10(", ")
-
-    print ("Equation sent to SymPy: ", equation)
-
-    try:
-        local_dict = {
-            "ln": sp.log,
-            "log10": lambda value: sp.log(value, 10),
-            "sqrt": sp.sqrt,
-            "pi": sp.pi,
-            "oo": sp.oo
-        }
-
-        expression = sp.sympify(equation, locals=local_dict)  # Convert the input string to a sympy expression
-        x_values = np.linspace(-10, 10, 400)
-        function = lambdify (x, expression, "numpy")  # Convert the sympy expression to a numpy function
-        y_values = function(x_values)
-
-        axis.clear()
-        axis.plot(x_values, y_values)
-        axis.set_xlabel("x")
-        axis.set_ylabel("y")
-        axis.set_title("Graph Visualizer")
-        axis.grid()
-        canvas.draw()
-
-    except Exception as e:
-        print ("Error: ", e)
 
 #def plot_graph(y, title):
     #x = np.linspace(-10, 10, 400)
@@ -135,7 +95,7 @@ class ExponentBox (QLineEdit):
         elif event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
             self.clearFocus()
             self.editor.text.setFocus()
-            update_graph()
+            update_all_graphs()
 
         else:
             super().keyPressEvent(event)
@@ -174,7 +134,7 @@ class AbsoluteValueBox (QLineEdit):
         elif event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
             self.clearFocus()
             self.editor.text.setFocus()
-            update_graph()
+            update_all_graphs()
 
         else:
             super().keyPressEvent(event)
@@ -187,6 +147,15 @@ class EquationEditor(QWidget):
 
         self.text = QLineEdit()
         self.text.setPlaceholderText("Enter an equation...")
+
+        self.text.setStyleSheet("""
+            QLineEdit {
+                background-color: #B5C99A;
+                border: 2px solid #7E8C6B;
+                border-radius: 5px;
+                padding: 5px;
+            }
+        """)
 
         self.text.setParent(self)
         self.text.returnPressed.connect(update_all_graphs)      # CHANGED IT TO UPDATE ALL GRAPHS
@@ -227,7 +196,6 @@ class EquationEditor(QWidget):
         absolute_box.show()
         absolute_box.raise_()
         absolute_box.setFocus()
-
 
     def get_equation (self):
         equation = self.text.text()
@@ -285,7 +253,22 @@ def add_equation():
     equation_row.addWidget(new_equation)
 
     plus_button = QPushButton("+")
-    plus_button.setFixedWidth(30)
+    plus_button.setFixedWidth(35)
+    plus_button.setStyleSheet("""
+        QPushButton {
+            background-color: #97A97C;
+            border: none;
+            border-radius: 5px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+        QPushButton:hover {
+            background-color: #87986A;
+        }
+        QPushButton:pressed {
+            background-color: #718355;
+        }
+    """)
 
     equation_row.addWidget(plus_button)
     equation_layout.addLayout(equation_row)
@@ -294,76 +277,152 @@ def add_equation():
     
 window = QWidget()
 window.setWindowTitle("Math Visualizer")
-window.resize(800, 600)
-layout = QVBoxLayout(window) # QVboxLayout -> layout manager that arranges widgets vertically
-controls = QWidget() # create a widget to hold the controls
-controls_layout = QVBoxLayout(controls) # create a layout for the controls
-equation_layout = QVBoxLayout()
-controls_layout.addLayout(equation_layout)
+window.resize(1000, 800)
 
-equation_editors = []
-equation_input = EquationEditor() 
+# colours
+window.setStyleSheet("""
+    QWidget {
+        background-color: #E9F5DB;
+    }
+""")
+
+main_layout = QGridLayout(window) # main 2x2 layout
+main_layout.addWidget(canvas,0,0) # top left
+
+slider_panel = QWidget()            # top right
+slider_layout = QVBoxLayout(slider_panel)
+
+slider = QSlider(Qt.Horizontal)
+slider.setMinimum(-10)
+slider.setMaximum(10)
+slider.setValue(0)
+
+slider.setStyleSheet("""
+    QSlider::groove:horizontal {
+        background: #B5C99A;
+        height: 6px;
+        border-radius: 3px
+    }
+    Qslider::handle:horizontal {
+        background: #718355;
+        width: 16px;
+        height: 16px
+        margin: -5px 0;
+        border-radius: 8px;
+    }
+    QSlider::sub=page:horizontal {
+        background: #718355;
+        border-radius: 3px;
+    }
+    QSlider::add-page:horizontal {
+        background: #CFE1B(;
+        border-radius: 3px;;
+    }
+""")
+
+slider_layout.addWidget(slider)
+main_layout.addWidget(slider_panel,0,1)
+
+# bottom left
+equation_panel = QWidget()
+equation_layout = QVBoxLayout(equation_panel)
+
+equation_editors = []  # keep track of every equations
+
+equation_input = EquationEditor()
 equation_editors.append(equation_input)
+
 first_row = QHBoxLayout()
 first_row.addWidget(equation_input)
+
 plus_button = QPushButton("+")
-plus_button.setFixedWidth(30)
+plus_button.setFixedWidth(35)
+
 first_row.addWidget(plus_button)
+
 equation_layout.addLayout(first_row)
+
 plus_button.clicked.connect(add_equation)
+
+main_layout.addWidget(equation_panel,1,0)
+
+# bottom right
+notation_panel = QWidget()
+notation_layout = QVBoxLayout(notation_panel)
+
+notation_button_style = """
+    QPushButton {
+        background-color: #B5C99A;
+        border: none;
+        border-radius: 5px;
+        padding: 8px;
+        font-size: 16px;
+    }
+    QPushButton:hover {
+        background-color: #97A97C;
+    }
+    QPushButton:pressed {
+        background-color: #87986A;
+    }
+"""
 
 # clear button
 clear_button = QPushButton ("Clear")
-controls_layout.addWidget(clear_button)
+notation_layout.addWidget(clear_button)
 clear_button.clicked.connect(clear_equation)
+clear_button.setStyleSheet(notation_button_style)
 
 # sqrt button
 sqrt_button = QPushButton("√")
-controls_layout.addWidget(sqrt_button)
+notation_layout.addWidget(sqrt_button)
 sqrt_button.clicked.connect(lambda: equation_input.insert("√(")) # when click button -> program sees "sqrt("
+sqrt_button.setStyleSheet(notation_button_style)
 
 # pi button
 pi_button = QPushButton("π")
-controls_layout.addWidget(pi_button)
+notation_layout.addWidget(pi_button)
 pi_button.clicked.connect(lambda: equation_input.insert("π")) 
+pi_button.setStyleSheet(notation_button_style)
 
 # exponenet button
 exponent_button = QPushButton("x²")
-controls_layout.addWidget(exponent_button)
+notation_layout.addWidget(exponent_button)
 exponent_button.clicked.connect(equation_input.add_exponent) 
+exponent_button.setStyleSheet(notation_button_style)
 
 # infinity button
 infinity_button = QPushButton("∞")
-controls_layout.addWidget(infinity_button)
+notation_layout.addWidget(infinity_button)
 infinity_button.clicked.connect(lambda: equation_input.insert("∞")) 
+infinity_button.setStyleSheet(notation_button_style)
 
 # ln button
 ln_button = QPushButton("ln")
-controls_layout.addWidget(ln_button)
+notation_layout.addWidget(ln_button)
 ln_button.clicked.connect(lambda: equation_input.insert("ln("))
+ln_button.setStyleSheet(notation_button_style)
 
 # log button
 log_button = QPushButton("log")
-controls_layout.addWidget(log_button)
+notation_layout.addWidget(log_button)
 log_button.clicked.connect(lambda: equation_input.insert("log10("))
+log_button.setStyleSheet(notation_button_style)
 
 # absolute value button
 abs_val_button = QPushButton("|x|")
-controls_layout.addWidget(abs_val_button)
+notation_layout.addWidget(abs_val_button)
 abs_val_button.clicked.connect(equation_input.add_absolute_value)
+abs_val_button.setStyleSheet(notation_button_style)
 
-#equation_input.returnPressed.connect(update_graph) # when user presses enter, update graph
+main_layout.addWidget(notation_panel, 1, 1)
 
-#layout.addWidget(button) # add button to layout
+# grid sizing
 
-#figure = Figure() # figure -> matplot graph container (where graph will be)
-#canvas = FigureCanvas(figure) # figurecanvas -> allows matplot graph to be inside Qt
+main_layout.setColumnStretch(0.7,3) # give graph & equation more space 
+main_layout.setColumnStretch(1,2) # give right side less space 
 
-
-top_layout = QHBoxLayout() # top section -> graph + controls
-top_layout.addWidget(canvas,2) # graph on left
-top_layout.addWidget(controls,3) # controls on right
-layout.addLayout(top_layout) # add top section to main layout
+main_layout.setRowStretch(0,5) # give top more space than bottom
+main_layout.setRowStretch(1,2)
 
 window.show()
 app.exec()
