@@ -2,7 +2,7 @@ import sympy as sp
 from sympy.utilities.lambdify import lambdify
 import numpy as np
 import matplotlib.pyplot as plt
-from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QLineEdit, QGridLayout, QSlider
+from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QLineEdit, QGridLayout, QSlider, QLabel
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas # figurecanvas -> allows matplot graph to be inside Qt window
@@ -50,8 +50,19 @@ def update_all_graphs():
             expression = sp.sympify (equation, locals = local_dict)
 
             x_values = np.linspace(-10,10,400)
-            function = lambdify(x, expression, "numpy")
-            y_values = function(x_values)
+
+            slider_values = {}
+
+            for variable in expression.free_symbols:
+                if variable != x:
+
+                    if variable in equation_input.sliders:
+                        slider_values[variable] = equation_input.sliders[variable].value()
+                    else:
+                        slider_values[variable] = 1
+
+            function = lambdify([x, *slider_values.keys()], expression, "numpy")
+            y_values = function(x_values, *slider_values.values())
             axis.plot(x_values, y_values, color="#4A533C")
 
         except Exception as e:
@@ -158,7 +169,8 @@ class EquationEditor(QWidget):
         """)
 
         self.text.setParent(self)
-        self.text.returnPressed.connect(update_all_graphs)      # CHANGED IT TO UPDATE ALL GRAPHS
+        self.text.returnPressed.connect(update_all_graphs)      
+        self.text.returnPressed.connect(update_sliders)
 
         self.exponents = []
         self.absolute_values = []
@@ -228,6 +240,79 @@ class EquationEditor(QWidget):
     def insert (self,text):
         self.text.insert(text)   
 
+def update_sliders():
+    while slider_layout.count():    # remove old sliders
+        item = slider_layout.takeAt(0)
+
+        if item.widget():
+            item.widget().deleteLater()
+
+    equation_input.sliders = {}
+
+    equation = equation_input.get_equation()
+
+    equation = equation.replace("√", "sqrt") 
+    equation = equation.replace("π", "pi")  
+    equation = equation.replace("∞", "oo")  
+    equation = equation.replace("ln(", "log(")
+
+    try:
+        expression = sp.sympify(equation)
+
+        variables = expression.free_symbols
+        variables = [v for v in variables if v != x]
+
+        print("Variables found:", variables)
+
+        for variable in sorted(variables, key=str):
+
+            label = QLabel(str(variable))
+            label.setStyleSheet("""
+                QLabel {
+                    color: #718355;
+                    font-size: 16px;
+                    font-weight: bold;
+                    }
+            """)
+
+
+            slider = QSlider (Qt.Horizontal)
+            slider.setMinimum(-10)
+            slider.setMaximum(10)
+            slider.setValue(1)
+
+            slider.setStyleSheet("""
+                QSlider::groove:horizontal {
+                    background: #B5C99A;
+                    height: 6px;
+                    border-radius: 3px;
+                }
+                QSlider::handle:horizontal {
+                    background: #718355;
+                    width: 16px;
+                    height: 16px;
+                    margin: -5px 0;
+                    border-radius: 8px;
+                }
+                QSlider::sub-page:horizontal {
+                    background: #718355;
+                    order-radius: 3px;
+                }
+                QSlider::Add-page:horizontal {
+                    background: #CFE1B9;
+                    border-radius: 3px;
+                }
+            """)
+
+            equation_input.sliders[variable] = slider
+            slider.valueChanged.connect(update_all_graphs)
+
+            slider_layout.addWidget(label)
+            slider_layout.addWidget(slider)
+
+    except Exception as e:
+        print ("Could not create sliders:", e)    
+
 def clear_equation():
     equation_input.text.clear()
 
@@ -292,36 +377,35 @@ main_layout.addWidget(canvas,0,0) # top left
 slider_panel = QWidget()            # top right
 slider_layout = QVBoxLayout(slider_panel)
 
-slider = QSlider(Qt.Horizontal)
-slider.setMinimum(-10)
-slider.setMaximum(10)
-slider.setValue(0)
+#slider = QSlider(Qt.Horizontal)
+#slider.setMinimum(-10)
+#slider.setMaximum(10)
+#slider.setValue(0)
 
-slider.setStyleSheet("""
-    QSlider::groove:horizontal {
-        background: #B5C99A;
-        height: 6px;
-        border-radius: 3px
-    }
-    Qslider::handle:horizontal {
-        background: #718355;
-        width: 16px;
-        height: 16px
-        margin: -5px 0;
-        border-radius: 8px;
-    }
-    QSlider::sub=page:horizontal {
-        background: #718355;
-        border-radius: 3px;
-    }
-    QSlider::add-page:horizontal {
-        background: #CFE1B(;
-        border-radius: 3px;;
-    }
-""")
-
-slider_layout.addWidget(slider)
+#slider_layout.addWidget(slider)
 main_layout.addWidget(slider_panel,0,1)
+
+#slider.setStyleSheet("""
+    #QSlider::groove:horizontal {
+        #background: #B5C99A;
+        #height: 6px;
+        #border-radius: 3px
+    #}
+    #Qslider::handle:horizontal {
+        #background: #718355;
+        #width: 16px;
+        #height: 16px
+        #margin: -5px 0;
+        #border-radius: 8px;
+    #}
+    #QSlider::sub=page:horizontal {
+        #background: #718355;
+        #border-radius: 3px;
+    #}
+    #QSlider::add-page:horizontal {
+        #background: #CFE1B(;
+        #border-radius: 3px;;
+#""")
 
 # bottom left
 equation_panel = QWidget()
