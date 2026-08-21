@@ -8,7 +8,7 @@ from PySide6.QtGui import QFont
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas # figurecanvas -> allows matplot graph to be inside Qt window
 from matplotlib.figure import Figure # figure -> the graph itself
 
-x = sp.symbols('x') # x = mathematical variable 
+x, a = sp.symbols('x a') # x = mathematical variable 
 
 
 app = QApplication([])
@@ -29,7 +29,7 @@ def update_all_graphs():
         # pi translator
         equation = equation.replace("π", "pi")  # Replace the pi symbol with sympy's pi function
         # infinity translator
-        equation = equation.replace("∞", "oo")  # Replace the infinity symbol with sympy's oo (infinity) function
+        #equation = equation.replace("∞", "oo")  # Replace the infinity symbol with sympy's oo (infinity) function
         # ln translator
         equation = equation.replace("ln(", "log(")
 
@@ -44,7 +44,7 @@ def update_all_graphs():
                 "log10": lambda value: sp.log(value, 10),
                 "sqrt": sp.sqrt,
                 "pi": sp.pi,
-                "oo": sp.oo
+                #"oo": sp.oo
             }
 
             expression = sp.sympify (equation, locals = local_dict)
@@ -195,6 +195,10 @@ class EquationEditor(QWidget):
         exponent_box.raise_()
         exponent_box.setFocus()
 
+    def add_a_power(self):
+        self.insert("a")          # insert a first 
+        self.add_exponent()       # exponent box right after
+
     def add_absolute_value(self):
         position = self.text.cursorPosition()
         absolute_box = AbsoluteValueBox(self, position)
@@ -219,7 +223,7 @@ class EquationEditor(QWidget):
                 position = exponent_box.position
                 exponent = exponent.replace("√", "sqrt")
                 exponent = exponent.replace("π", "pi")
-                exponent = exponent.replace("∞", "oo")
+                #exponent = exponent.replace("∞", "oo")
 
                 equation=(equation[:position]+ "**(" + exponent + ")" + equation[position:])
 
@@ -253,7 +257,7 @@ def update_sliders():
 
     equation = equation.replace("√", "sqrt") 
     equation = equation.replace("π", "pi")  
-    equation = equation.replace("∞", "oo")  
+    #equation = equation.replace("∞", "oo")  
     equation = equation.replace("ln(", "log(")
 
     try:
@@ -296,7 +300,7 @@ def update_sliders():
                 }
                 QSlider::sub-page:horizontal {
                     background: #718355;
-                    order-radius: 3px;
+                    border-radius: 3px;
                 }
                 QSlider::Add-page:horizontal {
                     background: #CFE1B9;
@@ -432,7 +436,7 @@ main_layout.addWidget(equation_panel,1,0)
 
 # bottom right
 notation_panel = QWidget()
-notation_layout = QVBoxLayout(notation_panel)
+notation_layout = QGridLayout(notation_panel)
 
 notation_button_style = """
     QPushButton {
@@ -452,57 +456,90 @@ notation_button_style = """
 
 # clear button
 clear_button = QPushButton ("Clear")
-notation_layout.addWidget(clear_button)
+notation_layout.addWidget(clear_button,0,0,1,3)
 clear_button.clicked.connect(clear_equation)
 clear_button.setStyleSheet(notation_button_style)
 
 # sqrt button
 sqrt_button = QPushButton("√")
-notation_layout.addWidget(sqrt_button)
+notation_layout.addWidget(sqrt_button,1,0)
 sqrt_button.clicked.connect(lambda: equation_input.insert("√(")) # when click button -> program sees "sqrt("
 sqrt_button.setStyleSheet(notation_button_style)
 
 # pi button
 pi_button = QPushButton("π")
-notation_layout.addWidget(pi_button)
+notation_layout.addWidget(pi_button,1,1)
 pi_button.clicked.connect(lambda: equation_input.insert("π")) 
 pi_button.setStyleSheet(notation_button_style)
 
 # exponenet button
 exponent_button = QPushButton("x²")
-notation_layout.addWidget(exponent_button)
+notation_layout.addWidget(exponent_button,1,2)
 exponent_button.clicked.connect(equation_input.add_exponent) 
 exponent_button.setStyleSheet(notation_button_style)
 
 # infinity button
-infinity_button = QPushButton("∞")
-notation_layout.addWidget(infinity_button)
-infinity_button.clicked.connect(lambda: equation_input.insert("∞")) 
-infinity_button.setStyleSheet(notation_button_style)
+#infinity_button = QPushButton("∞")
+#notation_layout.addWidget(infinity_button)
+#infinity_button.clicked.connect(lambda: equation_input.insert("∞")) 
+#infinity_button.setStyleSheet(notation_button_style)
 
 # ln button
 ln_button = QPushButton("ln")
-notation_layout.addWidget(ln_button)
+notation_layout.addWidget(ln_button,2,0)
 ln_button.clicked.connect(lambda: equation_input.insert("ln("))
 ln_button.setStyleSheet(notation_button_style)
 
 # log button
 log_button = QPushButton("log")
-notation_layout.addWidget(log_button)
+notation_layout.addWidget(log_button,2,1)
 log_button.clicked.connect(lambda: equation_input.insert("log10("))
 log_button.setStyleSheet(notation_button_style)
 
 # absolute value button
 abs_val_button = QPushButton("|x|")
-notation_layout.addWidget(abs_val_button)
+notation_layout.addWidget(abs_val_button,2,2)
 abs_val_button.clicked.connect(equation_input.add_absolute_value)
 abs_val_button.setStyleSheet(notation_button_style)
+
+# a button 
+a_button = QPushButton("a")
+notation_layout.addWidget(a_button,3,0)
+a_button.clicked.connect(lambda: equation_input.insert("a"))  
+a_button.setStyleSheet(notation_button_style)
+
+# a^n button
+a_pow_button = QPushButton("aⁿ")
+notation_layout.addWidget(a_pow_button,3,1)
+a_pow_button.clicked.connect(equation_input.add_a_power)
+a_pow_button.setStyleSheet(notation_button_style)
+
+# 3,2 FOR THE NEXT BUTTONS GRID LAYOUT
+
+# n root
+n_root_button = QPushButton("BLABLA")
+notation_layout.addWidget(n_root_button,3,2)
+#n_root_button.clicked.connect(equation_input.n_root)     #SOMETHING SOMETHING GET TO IT IN A BIT
+n_root_button.setStyleSheet(notation_button_style)
+
+# column width
+notation_layout.setColumnStretch(0,1)
+notation_layout.setColumnStretch(1,1)
+notation_layout.setColumnStretch(2,1)
+
+# row heights
+notation_layout.setRowStretch(0,1)
+notation_layout.setRowStretch(1,1)
+notation_layout.setRowStretch(2,1)
+notation_layout.setRowStretch(3,1)
+
+notation_layout.setSpacing(5)
 
 main_layout.addWidget(notation_panel, 1, 1)
 
 # grid sizing
 
-main_layout.setColumnStretch(0.7,3) # give graph & equation more space 
+main_layout.setColumnStretch(0,3) # give graph & equation more space 
 main_layout.setColumnStretch(1,2) # give right side less space 
 
 main_layout.setRowStretch(0,5) # give top more space than bottom
