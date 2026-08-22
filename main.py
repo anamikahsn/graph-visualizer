@@ -9,8 +9,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure # figure -> the graph itself
 
 x, a = sp.symbols('x a') # x = mathematical variable 
-
-
+active_equation = None
 app = QApplication([])
 
 figure = Figure(facecolor = "#EBEBE9")
@@ -111,6 +110,33 @@ class ExponentBox (QLineEdit):
         else:
             super().keyPressEvent(event)
 
+class NRootBox (QLineEdit):
+    def __init__(self, editor, position):
+        super().__init__(editor)
+
+        self.editor = editor 
+        self.position = position
+
+        self.setFixedSize(25,18)
+
+        small_font = QFont()
+        small_font.setPointSize(9)
+        self.setFont(small_font)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Right:
+            self.clearFocus()
+            self.editor.text.setFocus()
+            self.editor.text.setCursorPosition(self.position)
+
+        elif event.key() ==Qt.Key_Return or event.key() == Qt.Key_Enter:
+            self.clearFocus()
+            self.editor.text.setFocus()
+            update_all_graphs()
+
+        else:
+            super().keyPressEvent(event)
+
 class AbsoluteValueBox (QLineEdit):
     def __init__(self, editor, position):
         super().__init__(editor)
@@ -152,11 +178,22 @@ class AbsoluteValueBox (QLineEdit):
 
 equation_editors = []
 
+class EquationLineEdit (QLineEdit):
+    def __init__(self, editor):
+        self.editor = editor
+
+    def focusInEvent(self, event):
+        global active_equation
+
+        active_equation = self.editor
+        super().focusInEvent(event)
+
 class EquationEditor(QWidget):
     def __init__(self):
         super().__init__()
 
         self.text = QLineEdit()
+        self.text.setFocusPolicy(Qt.StrongFocus)
         self.text.setPlaceholderText("Enter an equation...")
 
         self.text.setStyleSheet("""
@@ -174,6 +211,7 @@ class EquationEditor(QWidget):
 
         self.exponents = []
         self.absolute_values = []
+        self.n_roots = []
         self.setMinimumHeight(50)
 
     def resizeEvent(self, event):
@@ -194,6 +232,21 @@ class EquationEditor(QWidget):
         exponent_box.show()
         exponent_box.raise_()
         exponent_box.setFocus()
+
+    def add_n_root(self):
+        position = self.text.cursorPosition()
+
+        self.insert("√")
+        root_box = NRootBox(self, position)
+
+        self.n_roots.append(root_box)
+        cursor_rect = self.text.cursorRect()
+
+        root_box.move(self.text.x() + cursor_rect.x() - 5, self.text.y() - 12)
+
+        root_box.show()
+        root_box.raise_()
+        root_box.setFocus()
 
     def add_a_power(self):
         self.insert("a")          # insert a first 
@@ -237,6 +290,19 @@ class EquationEditor(QWidget):
                 value = value.replace("∞", "oo")
 
                 equation = (equation[:position] + "Abs(" + value + ")" + equation [position:])
+
+        for root_box in sorted (self.n_roots, key=lambda box: box.position, reverse=True):
+            root = root_box.text()
+
+            if root:
+                position = root_box.position
+
+                sqrt_position = position
+
+                if sqrt_position < len(equation) - 1:
+                    value = equation[sqrt_position + 1]
+
+                    equation = (equation[:sqrt_position] + "(" + value + ")**(1/" + root + ")" + equation[sqrt_position + 2:])
         
         return equation 
 
@@ -279,7 +345,6 @@ def update_sliders():
                     }
             """)
 
-
             slider = QSlider (Qt.Horizontal)
             slider.setMinimum(-10)
             slider.setMaximum(10)
@@ -317,22 +382,76 @@ def update_sliders():
     except Exception as e:
         print ("Could not create sliders:", e)    
 
+# + & - button colours
+buttons_style = ("""
+    QPushButton {
+        background-color: #97A97C;
+        border: none;
+        border-radius: 5px;
+        font-size: 20px;
+        font-weight: bold;
+    }
+    QPushButton:hover {
+        background-color: #87986A;
+    }
+    QPushButton:pressed {
+        background-color: #718355;
+    }
+""")
+
 def clear_equation():
-    equation_input.text.clear()
+    for editor in equation_editors:
+        editor.text.clear()
 
-    for exponent_box in equation_input.exponents:
-        exponent_box.deleteLater()
+        for exponent_box in editor.exponents: exponents_box.deleteLater()
 
-    equation_input.exponents.clear()
+        editor.exponents.clear()
 
-    for absolute_box in equation_input.absolute_values:
-        absolute_box.deleteLater()
+        for absolute_box in editor.absolute_values:
+            absolute_box.deleteLater()
 
-    # clear graph
+        editor.absolute_values.clear()
+
+        for root_box in editor.n_roots:
+            root_box.deleteLater()
+
+        editor.n_roots.clear()
+
     axis.clear()
-    canvas.draw()
-    # clear search bar
+    axis.set_xlabel("x")
+    axis.set_ylabel("y")
+    axis.set_title("Graph Visualizer")
+    axis.grid()
+    axis.draw()
+
     equation_input.text.setFocus()
+    update_sliders()
+
+def remove_equation(editor, row):
+    if len(equation_editors) <= 1:
+        return
+
+    for box in editor.exponents:
+        box.deleteLater()
+
+    for box in editor.abosolute_values:
+        box.deleteLater()
+
+    for box in editor.n_roots:
+        box.deleteLater()
+
+    if editor in equation_editors:
+        equation_editors.remove(editor)
+
+    while row.count():
+        item = row.takeAt(0)
+
+        if item.widget():
+            item.widget().deleteLater()
+
+    equation_layout.removeItem(row)
+    editor.deleteLater()
+    update_all_graphs
 
 def add_equation():
     new_equation = EquationEditor()
@@ -343,25 +462,20 @@ def add_equation():
 
     plus_button = QPushButton("+")
     plus_button.setFixedWidth(35)
-    plus_button.setStyleSheet("""
-        QPushButton {
-            background-color: #97A97C;
-            border: none;
-            border-radius: 5px;
-            font-size: 20px;
-            font-weight: bold;
-        }
-        QPushButton:hover {
-            background-color: #87986A;
-        }
-        QPushButton:pressed {
-            background-color: #718355;
-        }
-    """)
+    plus_button.setStyleSheet(buttons_style)
+
+    minus_button = QPushButton("-")
+    minus_button.setFixedWidth(35)
+    minus_button.setStyleSheet(buttons_style)
 
     equation_row.addWidget(plus_button)
+    equation_row.addWidget(minus_button)
+
     equation_layout.addLayout(equation_row)
+
     plus_button.clicked.connect(add_equation)
+    minus_button.clicked.connect(lambda: remove_equation(new_equation, equation_row))
+
     new_equation.text.setFocus()
     
 window = QWidget()
@@ -419,18 +533,26 @@ equation_editors = []  # keep track of every equations
 
 equation_input = EquationEditor()
 equation_editors.append(equation_input)
+active_equation = equation_input
 
 first_row = QHBoxLayout()
 first_row.addWidget(equation_input)
 
 plus_button = QPushButton("+")
 plus_button.setFixedWidth(35)
+plus_button.setStyleSheet(buttons_style)
+
+minus_button = QPushButton("-")
+minus_button.setFixedWidth(35)
+minus_button.setStyleSheet(buttons_style)
 
 first_row.addWidget(plus_button)
+first_row.addWidget(minus_button)
 
 equation_layout.addLayout(first_row)
 
 plus_button.clicked.connect(add_equation)
+minus_button.clicked.connect(lambda: remove_equation(equation_input, first_row))
 
 main_layout.addWidget(equation_panel,1,0)
 
@@ -463,19 +585,19 @@ clear_button.setStyleSheet(notation_button_style)
 # sqrt button
 sqrt_button = QPushButton("√")
 notation_layout.addWidget(sqrt_button,1,0)
-sqrt_button.clicked.connect(lambda: equation_input.insert("√(")) # when click button -> program sees "sqrt("
+sqrt_button.clicked.connect(lambda: active_equation.insert("√(")) # when click button -> program sees "sqrt("
 sqrt_button.setStyleSheet(notation_button_style)
 
 # pi button
 pi_button = QPushButton("π")
 notation_layout.addWidget(pi_button,1,1)
-pi_button.clicked.connect(lambda: equation_input.insert("π")) 
+pi_button.clicked.connect(lambda: active_equation.insert("π")) 
 pi_button.setStyleSheet(notation_button_style)
 
 # exponenet button
 exponent_button = QPushButton("x²")
 notation_layout.addWidget(exponent_button,1,2)
-exponent_button.clicked.connect(equation_input.add_exponent) 
+exponent_button.clicked.connect(lambda: active_equation.add_exponent) 
 exponent_button.setStyleSheet(notation_button_style)
 
 # infinity button
@@ -487,39 +609,37 @@ exponent_button.setStyleSheet(notation_button_style)
 # ln button
 ln_button = QPushButton("ln")
 notation_layout.addWidget(ln_button,2,0)
-ln_button.clicked.connect(lambda: equation_input.insert("ln("))
+ln_button.clicked.connect(lambda: active_equation.insert("ln("))
 ln_button.setStyleSheet(notation_button_style)
 
 # log button
 log_button = QPushButton("log")
 notation_layout.addWidget(log_button,2,1)
-log_button.clicked.connect(lambda: equation_input.insert("log10("))
+log_button.clicked.connect(lambda: active_equation.insert("log10("))
 log_button.setStyleSheet(notation_button_style)
 
 # absolute value button
 abs_val_button = QPushButton("|x|")
 notation_layout.addWidget(abs_val_button,2,2)
-abs_val_button.clicked.connect(equation_input.add_absolute_value)
+abs_val_button.clicked.connect(lambda: active_equation.add_absolute_value)
 abs_val_button.setStyleSheet(notation_button_style)
 
 # a button 
 a_button = QPushButton("a")
 notation_layout.addWidget(a_button,3,0)
-a_button.clicked.connect(lambda: equation_input.insert("a"))  
+a_button.clicked.connect(lambda: active_equation.insert("a"))  
 a_button.setStyleSheet(notation_button_style)
 
 # a^n button
 a_pow_button = QPushButton("aⁿ")
 notation_layout.addWidget(a_pow_button,3,1)
-a_pow_button.clicked.connect(equation_input.add_a_power)
+a_pow_button.clicked.connect(lambda: active_equation.add_a_power)
 a_pow_button.setStyleSheet(notation_button_style)
 
-# 3,2 FOR THE NEXT BUTTONS GRID LAYOUT
-
 # n root
-n_root_button = QPushButton("BLABLA")
+n_root_button = QPushButton("ⁿ√")
 notation_layout.addWidget(n_root_button,3,2)
-#n_root_button.clicked.connect(equation_input.n_root)     #SOMETHING SOMETHING GET TO IT IN A BIT
+n_root_button.clicked.connect(lambda: active_equation.add_n_root) 
 n_root_button.setStyleSheet(notation_button_style)
 
 # column width
